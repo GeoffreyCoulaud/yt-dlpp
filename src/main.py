@@ -4,7 +4,7 @@ import sys
 from typing import Callable
 from yt_dlp.options import create_parser as create_ydl_parser
 from multiprocessing import JoinableQueue, cpu_count
-from base_worker import BaseWorker
+from worker import BaseWorker, TaskConsumer, WorkerGroup
 from src.download_worker import DownloadWorker
 from src.info_worker import InfoWorker
 from src.progress_worker import ProgressWorker
@@ -34,42 +34,44 @@ def main():
     if not isinstance(options, dict):
         raise ValueError("Options cannot be parsed to a dict")
 
-    # Create the queues and workers
+    # Create the queues
     info_queue = JoinableQueue()
     dl_queue = JoinableQueue()
     progress_queue = JoinableQueue()
 
-    # Start the workers
-    n_info_workers = main_args.n_info_workers
-    n_dl_workers = main_args.n_dl_workers
-    workers: list[BaseWorker] = [
-        *repeat(InfoWorker(options, info_queue, dl_queue), n_info_workers),
-        *repeat(DownloadWorker(options, dl_queue, progress_queue), n_dl_workers),
+    # Create the workers
+    task_consumers: tuple[TaskConsumer] = (
+        WorkerGroup(
+            info_queue,
+            dl_queue,
+            *repeat(
+                InfoWorker(options, None, None),
+                main_args.n_info_workers,
+            ),
+        ),
+        WorkerGroup(
+            dl_queue,
+            progress_queue,
+            *repeat(
+                DownloadWorker(options, None, None),
+                main_args.n_dl_workers,
+            ),
+        ),
         ProgressWorker(progress_queue),
-    ]
-    for worker in workers:
-        worker.start()
+    )
+
+    # Start the workers
+    for task_consumer in task_consumers:
+        task_consumer.start()
 
     # Send the initial URLs to the info queue
     for cli_url in cli_urls:
         info_queue.put(cli_url)
 
-    # Info workers won't get more tasks, inform them and wait until they finish
-    for _ in range(n_info_workers):
-        info_queue.put(None)
-    info_queue.close()
-    info_queue.join()
-
-    # DL workers won't get more tasks, inform them and wait until they finish
-    for _ in range(n_dl_workers):
-        dl_queue.put(None)
-    dl_queue.close()
-    dl_queue.join()
-
-    # Progress worker won't get more tasks, inform it and wait until it finishes
-    progress_queue.put(None)
-    progress_queue.close()
-    progress_queue.join()
+    # Wait for every step to finish, one after the other
+    for task_consumer in task_consumers:
+        task_consumer.close()
+        task_consumer.join()
 
     # If all went well, all of our workers finished
     # The remaining ones will be killed at exit since they're daemon processes

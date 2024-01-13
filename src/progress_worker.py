@@ -1,6 +1,6 @@
 from multiprocessing import JoinableQueue
 from typing import Optional
-from src.base_worker import BaseWorker
+from worker import BaseWorker
 
 from src.progress_info import ProgressInfo
 

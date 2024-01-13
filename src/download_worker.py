@@ -1,7 +1,7 @@
 from functools import partial
 from multiprocessing import JoinableQueue, Queue
 from typing import Any, Optional
-from src.base_worker import BaseWorker
+from worker import BaseWorker
 from src.progress_info import ProgressInfo
 
 from yt_dlp import YoutubeDL
