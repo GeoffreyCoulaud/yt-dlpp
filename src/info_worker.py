@@ -3,10 +3,10 @@ from typing import Any, Optional
 
 from yt_dlp import YoutubeDL
 
-from worker import BaseWorker
+from worker import Worker
 
 
-class InfoWorker(BaseWorker[str, str]):
+class InfoWorker(Worker[str, str]):
     """
     Worker process that treats yt-dlp urls, gets info from them and passes video urls.
 

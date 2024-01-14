@@ -1,85 +1,84 @@
 from abc import abstractmethod
 from multiprocessing import JoinableQueue, Process
 import sys
-from typing import Generic, Sequence, TypeVar
+from typing import Any, Generic, Sequence, TypeVar
 
 TaskValueT = TypeVar("TaskValueT")
 
 
-# TODO better name aaaaaaaaa
-class TaskConsumer(Generic[TaskValueT]):
-    """Interface for objects that consume tasks with an input JoinableQueue"""
+class WorkerInterface(Generic[TaskValueT]):
+    """Base class for `Worker`s and `WorkerGroup`s"""
 
     @abstractmethod
-    def put(self, task: None | TaskValueT) -> None:
-        """Put a task in the input queue of the worker"""
+    def start(self) -> None:
+        """Start the worker"""
+
+    @abstractmethod
+    def end_of_tasks(self) -> None:
+        """Signal the end of the tasks to the worker"""
 
     @abstractmethod
     def close(self) -> None:
-        """Signal to the worker to end and close its queue"""
+        """Signal to the worker to close its queue"""
 
     @abstractmethod
     def join(self) -> None:
-        """Join the worker after all tasks have been done"""
+        """Wait until all tasks are done"""
 
 
-class BaseWorker(
+class Worker(
     Process,
-    TaskConsumer[TaskValueT],
+    WorkerInterface[TaskValueT],
     Generic[TaskValueT],
 ):
     """Worker process with input and output queues"""
 
-    _input_queue: None | JoinableQueue[None | TaskValueT]
-    _output_queue: None | JoinableQueue[None | TaskValueT]
+    # HACK: type keyword is python 3.12 only
+    # type WorkerQueue = JoinableQueue[None, TaskValueT]
+    # type OptionalWorkerQueue = None | WorkerQueue
+    WorkerQueue = JoinableQueue[None | Any]
+    OptionalWorkerQueue = None | WorkerQueue
 
-    # --- Task consumer methods
+    # --- Protected methods
 
-    def put(self, task) -> None:
-        self._input_queue.put(task)
+    __input_queue: WorkerQueue
+    __output_queue: OptionalWorkerQueue
 
-    def close(self) -> None:
-        self.put(None)
-        self._input_queue.close()
+    def _send_output(self, value: TaskValueT) -> None:
+        """Send an item to the output queue if it exists, else do nothing"""
+        if self.__output_queue is None:
+            return
+        self.__output_queue.put(value)
 
-    def join(self) -> None:
-        self._input_queue.join()
+    @abstractmethod
+    def _process_item(self, item: TaskValueT) -> Sequence[TaskValueT]:
+        """Process an item from the queue and return results to the output queue."""
 
-    # --- Worker methods
+    # --- Init
 
     def __init__(
         self,
-        input_queue: None | JoinableQueue[None | TaskValueT],
-        output_queue: None | JoinableQueue[None | TaskValueT],
+        input_queue: WorkerQueue,
+        output_queue: OptionalWorkerQueue,
     ) -> None:
-        super().__init__(daemon=True)
-        self._input_queue = input_queue
-        self._output_queue = output_queue
+        super(Process, self).__init__(daemon=True)
+        self.__input_queue = input_queue
+        self.__output_queue = output_queue
 
-    def start(self) -> None:
-        assert self._input_queue is not None, "Cannot run without an input queue"
-        super().start()
+    # --- Public methods
 
     def run(self) -> None:
         """Subprocess' main function"""
 
         while True:
-            # Break if there is no queue
-            if not self._input_queue:
-                break
-
-            # Get input item
-            item: None | TaskValueT = self._input_queue.get()
-
-            # Process it
+            # Process the next item
+            item: TaskValueT = self.__input_queue.get()
+            results = []
             if item is not None:
-                results = self._process_item(item)
-                if self._output_queue is not None:
-                    for result in results:
-                        self._output_queue.put(result)
-
-            # Signal that we finished processing
-            self._input_queue.task_done()
+                results.extend(self._process_item(item))
+            for result in results:
+                self._send_output(result)
+            self.__input_queue.task_done()
 
             # Stop if requested to
             if item is None:
@@ -88,57 +87,47 @@ class BaseWorker(
         # Exit gracefuly
         sys.exit(0)
 
-    @abstractmethod
-    def _process_item(self, item: TaskValueT) -> Sequence[TaskValueT]:
-        """Process an item from the queue and return results to the output queue."""
+    def start(self) -> None:
+        super(Process, self).start()
 
-    def set_input_queue(self, queue: None | JoinableQueue[None | TaskValueT]) -> None:
-        """Replace the worker's input queue in place"""
-        self._input_queue = queue
-
-    def set_output_queue(self, queue: None | JoinableQueue[None | TaskValueT]) -> None:
-        """Replace the worker's output queue in place"""
-        self._output_queue = queue
-
-
-class WorkerGroup(TaskConsumer[TaskValueT]):
-    """Group containing workers"""
-
-    _workers: tuple[BaseWorker]
-    _input_queue: None | JoinableQueue[None | TaskValueT]
-    _output_queue: None | JoinableQueue[None | TaskValueT]
-
-    def __init__(
-        self,
-        input_queue: None | JoinableQueue[None | TaskValueT],
-        output_queue: None | JoinableQueue[None | TaskValueT],
-        *workers: BaseWorker
-    ) -> None:
-        self._input_queue = input_queue
-        self._output_queue = output_queue
-        self._workers = workers
-
-        # Set the worker queues to the group's queues
-        for worker in self._workers:
-            worker.set_input_queue(input_queue)
-            worker.set_output_queue(output_queue)
-
-    # --- Task consumer methods
-
-    def put(self, task: None | TaskValueT) -> None:
-        self._input_queue.put(task)
+    def end_of_tasks(self) -> None:
+        self.__input_queue.put(None)
 
     def close(self) -> None:
-        for _ in self._workers:
-            self.put(None)
-        self._input_queue.close()
+        self.__input_queue.close()
 
     def join(self) -> None:
-        self._input_queue.join()
+        self.__input_queue.join()
 
-    # --- Worker group method
+
+class WorkerGroup(WorkerInterface[TaskValueT]):
+    """Group containing workers"""
+
+    # --- Protected methods
+
+    __workers: tuple[Worker]
+
+    # --- Init
+
+    def __init__(self, *workers: Worker) -> None:
+        self.__workers = workers
+
+    # --- Public methods
 
     def start(self) -> None:
         """Start all the workers in the group"""
-        for worker in self._workers:
+        for worker in self.__workers:
             worker.start()
+
+    def end_of_tasks(self) -> None:
+        for worker in self.__workers:
+            worker.end_of_tasks()
+
+    def close(self) -> None:
+        # TODO won't work when workers share a queue AAAAAAA
+        for worker in self.__workers:
+            worker.close()
+
+    def join(self) -> None:
+        for worker in self.__workers:
+            worker.join()

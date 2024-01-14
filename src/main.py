@@ -1,10 +1,9 @@
 import argparse
 from itertools import repeat
 import sys
-from typing import Callable
 from yt_dlp.options import create_parser as create_ydl_parser
 from multiprocessing import JoinableQueue, cpu_count
-from worker import BaseWorker, TaskConsumer, WorkerGroup
+from worker import WorkerInterface, WorkerGroup
 from src.download_worker import DownloadWorker
 from src.info_worker import InfoWorker
 from src.progress_worker import ProgressWorker
@@ -23,55 +22,53 @@ def main():
         description="A wrapper to download content using yt-dlp in parallel",
         epilog="See `yt-dlp --help` for more CLI options",
     )
-    parser.add_argument("--n-info-workers", type=int, default=cpu_count())
-    parser.add_argument("--n-dl-workers", type=int, default=cpu_count())
-    main_args: _MainArgs
-    main_args, other_args = parser.parse_known_args()
+    parser.add_argument(
+        "--n-info-workers",
+        type=int,
+        default=cpu_count(),
+        help="Number of info workers to use",
+    )
+    parser.add_argument(
+        "--n-dl-workers",
+        type=int,
+        default=cpu_count(),
+        help="Number of download workers to use",
+    )
+    args: _MainArgs
+    args, ydl_args = parser.parse_known_args()
 
     # Parse the yt-dlp arguments
     ydl_parser = create_ydl_parser()
-    options, cli_urls = ydl_parser.parse_args(args=other_args)
+    options, cli_urls = ydl_parser.parse_args(args=ydl_args)
     if not isinstance(options, dict):
         raise ValueError("Options cannot be parsed to a dict")
 
     # Create the queues
-    info_queue = JoinableQueue()
-    dl_queue = JoinableQueue()
+    generic_url_queue = JoinableQueue()
+    video_url_queue = JoinableQueue()
     progress_queue = JoinableQueue()
 
     # Create the workers
-    task_consumers: tuple[TaskConsumer] = (
-        WorkerGroup(
-            info_queue,
-            dl_queue,
-            *repeat(
-                InfoWorker(options, None, None),
-                main_args.n_info_workers,
-            ),
-        ),
-        WorkerGroup(
-            dl_queue,
-            progress_queue,
-            *repeat(
-                DownloadWorker(options, None, None),
-                main_args.n_dl_workers,
-            ),
-        ),
+    info_workers = repeat(InfoWorker(options, None, None), args.n_info_workers)
+    download_workers = repeat(DownloadWorker(options, None, None), args.n_dl_workers)
+    workers: tuple[WorkerInterface] = (
+        WorkerGroup(*info_workers),
+        WorkerGroup(*download_workers),
         ProgressWorker(progress_queue),
     )
 
     # Start the workers
-    for task_consumer in task_consumers:
-        task_consumer.start()
+    for worker in workers:
+        worker.start()
 
-    # Send the initial URLs to the info queue
+    # Send the initial URLs to the queue
     for cli_url in cli_urls:
-        info_queue.put(cli_url)
+        generic_url_queue.put(cli_url)
 
     # Wait for every step to finish, one after the other
-    for task_consumer in task_consumers:
-        task_consumer.close()
-        task_consumer.join()
+    for worker in workers:
+        worker.close()
+        worker.join()
 
     # If all went well, all of our workers finished
     # The remaining ones will be killed at exit since they're daemon processes

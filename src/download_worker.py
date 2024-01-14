@@ -1,13 +1,13 @@
 from functools import partial
 from multiprocessing import JoinableQueue, Queue
 from typing import Any, Optional
-from worker import BaseWorker
+from worker import Worker
 from src.progress_info import ProgressInfo
 
 from yt_dlp import YoutubeDL
 
 
-class DownloadWorker(BaseWorker):
+class DownloadWorker(Worker):
     """Worker process that downloads from yt-dlp video urls"""
 
     input_queue: JoinableQueue

@@ -1,11 +1,10 @@
 from multiprocessing import JoinableQueue
-from typing import Optional
-from worker import BaseWorker
+from worker import Worker
 
 from src.progress_info import ProgressInfo
 
 
-class ProgressWorker(BaseWorker):
+class ProgressWorker(Worker):
     """Worker in charge of displaying progress info"""
 
     input_queue: JoinableQueue
