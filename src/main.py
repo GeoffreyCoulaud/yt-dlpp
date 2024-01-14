@@ -51,11 +51,17 @@ def main():
     progress_queue = JoinableQueue()
 
     # Create the workers
-    info_workers = repeat(InfoWorker(options, None, None), args.n_info_workers)
-    download_workers = repeat(DownloadWorker(options, None, None), args.n_dl_workers)
     workers: tuple[WorkerInterface] = (
-        WorkerGroup(*info_workers),
-        WorkerGroup(*download_workers),
+        WorkerGroup.from_class(
+            args.n_info_workers,
+            InfoWorker,
+            (options, generic_url_queue, video_url_queue),
+        ),
+        WorkerGroup.from_class(
+            args.n_dl_workers,
+            DownloadWorker,
+            (options, video_url_queue, progress_queue),
+        ),
         ProgressWorker(progress_queue),
     )
 
@@ -69,8 +75,10 @@ def main():
 
     # Wait for every step to finish, one after the other
     for worker in workers:
-        worker.close()
-        worker.join()
+        worker.dismiss()
+        worker_input_queue = worker.get_input_queue()
+        worker_input_queue.close()
+        worker_input_queue.join()
 
     # If all went well, all of our workers finished
     # The remaining ones will be killed at exit since they're daemon processes

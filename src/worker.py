@@ -14,16 +14,12 @@ class WorkerInterface(Generic[TaskValueT]):
         """Start the worker"""
 
     @abstractmethod
-    def end_of_tasks(self) -> None:
-        """Signal the end of the tasks to the worker"""
+    def get_input_queue(self) -> JoinableQueue[None | TaskValueT]:
+        """Get the worker's input queue"""
 
     @abstractmethod
-    def close(self) -> None:
-        """Signal to the worker to close its queue"""
-
-    @abstractmethod
-    def join(self) -> None:
-        """Wait until all tasks are done"""
+    def dismiss(self) -> None:
+        """Signal to the worker to exit"""
 
 
 class Worker(
@@ -36,19 +32,19 @@ class Worker(
     # HACK: type keyword is python 3.12 only
     # type WorkerQueue = JoinableQueue[None, TaskValueT]
     # type OptionalWorkerQueue = None | WorkerQueue
-    WorkerQueue = JoinableQueue[None | Any]
-    OptionalWorkerQueue = None | WorkerQueue
+    _WorkerQueue = JoinableQueue[None | Any]
+    _OptionalWorkerQueue = None | _WorkerQueue
 
     # --- Protected methods
 
-    __input_queue: WorkerQueue
-    __output_queue: OptionalWorkerQueue
+    input_queue: _WorkerQueue
+    output_queue: _OptionalWorkerQueue
 
     def _send_output(self, value: TaskValueT) -> None:
         """Send an item to the output queue if it exists, else do nothing"""
-        if self.__output_queue is None:
+        if self.output_queue is None:
             return
-        self.__output_queue.put(value)
+        self.output_queue.put(value)
 
     @abstractmethod
     def _process_item(self, item: TaskValueT) -> Sequence[TaskValueT]:
@@ -58,12 +54,12 @@ class Worker(
 
     def __init__(
         self,
-        input_queue: WorkerQueue,
-        output_queue: OptionalWorkerQueue,
+        input_queue: _WorkerQueue,
+        output_queue: _OptionalWorkerQueue,
     ) -> None:
         super(Process, self).__init__(daemon=True)
-        self.__input_queue = input_queue
-        self.__output_queue = output_queue
+        self.input_queue = input_queue
+        self.output_queue = output_queue
 
     # --- Public methods
 
@@ -72,13 +68,13 @@ class Worker(
 
         while True:
             # Process the next item
-            item: TaskValueT = self.__input_queue.get()
+            item: TaskValueT = self.input_queue.get()
             results = []
             if item is not None:
                 results.extend(self._process_item(item))
             for result in results:
                 self._send_output(result)
-            self.__input_queue.task_done()
+            self.input_queue.task_done()
 
             # Stop if requested to
             if item is None:
@@ -90,18 +86,15 @@ class Worker(
     def start(self) -> None:
         super(Process, self).start()
 
-    def end_of_tasks(self) -> None:
-        self.__input_queue.put(None)
+    def dismiss(self) -> None:
+        self.input_queue.put(None)
 
-    def close(self) -> None:
-        self.__input_queue.close()
-
-    def join(self) -> None:
-        self.__input_queue.join()
+    def get_input_queue(self) -> JoinableQueue[None | TaskValueT]:
+        return self.input_queue
 
 
 class WorkerGroup(WorkerInterface[TaskValueT]):
-    """Group containing workers"""
+    """Group of workers of the same type, sharing an input queue"""
 
     # --- Protected methods
 
@@ -110,24 +103,34 @@ class WorkerGroup(WorkerInterface[TaskValueT]):
     # --- Init
 
     def __init__(self, *workers: Worker) -> None:
+        """
+        Intitialize a WorkerGroup\n
+        It is critical that workers share their input queue.
+        """
+        assert len(workers) > 0, "Cannot create WorkerGroup with no workers"
+        assert (
+            len({worker.get_input_queue() for worker in workers}) == 1
+        ), "Workers of a WorkerGroup must all have the same input queue"
         self.__workers = workers
+
+    @classmethod
+    def from_class(cls, n: int, klass: type[Worker], *args) -> "WorkerGroup":
+        """
+        Create a worker group containing n workers of the given class
+        with all the same constructor args
+        """
+        workers = (klass(*args) for _ in n)
+        return WorkerGroup(*workers)
 
     # --- Public methods
 
     def start(self) -> None:
-        """Start all the workers in the group"""
         for worker in self.__workers:
             worker.start()
 
-    def end_of_tasks(self) -> None:
+    def dismiss(self) -> None:
         for worker in self.__workers:
-            worker.end_of_tasks()
+            worker.dismiss()
 
-    def close(self) -> None:
-        # TODO won't work when workers share a queue AAAAAAA
-        for worker in self.__workers:
-            worker.close()
-
-    def join(self) -> None:
-        for worker in self.__workers:
-            worker.join()
+    def get_input_queue(self) -> JoinableQueue[None | TaskValueT]:
+        return self.__workers[0].get_input_queue()
