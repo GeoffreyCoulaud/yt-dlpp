@@ -7,7 +7,7 @@ TaskValueT = TypeVar("TaskValueT")
 
 
 class WorkerInterface(Generic[TaskValueT]):
-    """Base class for `Worker`s and `WorkerGroup`s"""
+    """Base class for Worker and WorkerPool"""
 
     @abstractmethod
     def start(self) -> None:
@@ -93,8 +93,8 @@ class Worker(
         return self.input_queue
 
 
-class WorkerGroup(WorkerInterface[TaskValueT]):
-    """Group of workers of the same type, sharing an input queue"""
+class WorkerPool(WorkerInterface[TaskValueT]):
+    """Pool of workers sharing an input queue"""
 
     # --- Protected methods
 
@@ -104,23 +104,23 @@ class WorkerGroup(WorkerInterface[TaskValueT]):
 
     def __init__(self, *workers: Worker) -> None:
         """
-        Intitialize a WorkerGroup\n
+        Intitialize a Pool\n
         It is critical that workers share their input queue.
         """
-        assert len(workers) > 0, "Cannot create WorkerGroup with no workers"
+        assert len(workers) > 0, "Cannot create pool with no workers"
         assert (
             len({worker.get_input_queue() for worker in workers}) == 1
-        ), "Workers of a WorkerGroup must all have the same input queue"
+        ), "All Workers in a pool must have the same input queue"
         self.__workers = workers
 
     @classmethod
-    def from_class(cls, n: int, klass: type[Worker], *args) -> "WorkerGroup":
+    def from_class(cls, n: int, klass: type[Worker], *args) -> "WorkerPool":
         """
-        Create a worker group containing n workers of the given class
+        Create a worker pool containing n workers of the given class
         with all the same constructor args
         """
         workers = (klass(*args) for _ in n)
-        return WorkerGroup(*workers)
+        return WorkerPool(*workers)
 
     # --- Public methods
 

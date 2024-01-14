@@ -8,7 +8,7 @@ from yt_dlp.options import create_parser as create_ydl_parser
 from src.download_worker import DownloadWorker
 from src.info_worker import InfoWorker
 from src.progress_worker import ProgressWorker
-from worker import WorkerGroup, WorkerInterface
+from worker import WorkerInterface, WorkerPool
 
 
 class _MainArgs(argparse.Namespace):
@@ -52,12 +52,12 @@ def main():
 
     # Create the workers
     workers: tuple[WorkerInterface] = (
-        WorkerGroup.from_class(
+        WorkerPool.from_class(
             args.n_info_workers,
             InfoWorker,
             (options, generic_url_queue, video_url_queue),
         ),
-        WorkerGroup.from_class(
+        WorkerPool.from_class(
             args.n_dl_workers,
             DownloadWorker,
             (options, video_url_queue, progress_queue),
