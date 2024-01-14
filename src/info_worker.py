@@ -1,5 +1,5 @@
 from multiprocessing import JoinableQueue
-from typing import Any, Optional
+from typing import Any
 
 from yt_dlp import YoutubeDL
 

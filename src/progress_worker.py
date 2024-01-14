@@ -1,7 +1,7 @@
 from multiprocessing import JoinableQueue
-from worker import Worker
 
 from src.progress_info import ProgressInfo
+from worker import Worker
 
 
 class ProgressWorker(Worker):

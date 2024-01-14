@@ -1,12 +1,14 @@
 import argparse
-from itertools import repeat
 import sys
-from yt_dlp.options import create_parser as create_ydl_parser
+from itertools import repeat
 from multiprocessing import JoinableQueue, cpu_count
-from worker import WorkerInterface, WorkerGroup
+
+from yt_dlp.options import create_parser as create_ydl_parser
+
 from src.download_worker import DownloadWorker
 from src.info_worker import InfoWorker
 from src.progress_worker import ProgressWorker
+from worker import WorkerGroup, WorkerInterface
 
 
 class _MainArgs(argparse.Namespace):

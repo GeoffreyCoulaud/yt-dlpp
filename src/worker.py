@@ -1,6 +1,6 @@
+import sys
 from abc import abstractmethod
 from multiprocessing import JoinableQueue, Process
-import sys
 from typing import Any, Generic, Sequence, TypeVar
 
 TaskValueT = TypeVar("TaskValueT")

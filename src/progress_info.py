@@ -1,6 +1,4 @@
-from typing import Literal, NotRequired, Optional, TypedDict
-
-from pyparsing import Any
+from typing import Any, Literal, NotRequired, Optional, TypedDict
 
 
 class BaseProgressInfo(TypedDict):
