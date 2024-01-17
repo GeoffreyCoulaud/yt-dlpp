@@ -5,6 +5,7 @@ from multiprocessing import JoinableQueue, cpu_count
 
 from yt_dlp.options import create_parser as create_ydl_parser
 
+from dedup_worker import DedupWorker
 from src.download_worker import DownloadWorker
 from src.info_worker import InfoWorker
 from src.progress_worker import ProgressWorker
@@ -48,6 +49,7 @@ def main():
     # Create the queues
     generic_url_queue = JoinableQueue()
     video_url_queue = JoinableQueue()
+    dl_url_queue = JoinableQueue()
     progress_queue = JoinableQueue()
 
     # Create the workers
@@ -57,12 +59,18 @@ def main():
             InfoWorker,
             (options, generic_url_queue, video_url_queue),
         ),
+        DedupWorker(
+            video_url_queue,
+            dl_url_queue,
+        ),
         WorkerPool.from_class(
             args.n_dl_workers,
             DownloadWorker,
-            (options, video_url_queue, progress_queue),
+            (options, dl_url_queue, progress_queue),
         ),
-        ProgressWorker(progress_queue),
+        ProgressWorker(
+            progress_queue,
+        ),
     )
 
     # Start the workers

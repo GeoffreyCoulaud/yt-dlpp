@@ -1,9 +1,14 @@
 from typing import Any, Literal, NotRequired, Optional, TypedDict
 
 
+class InfoDict(TypedDict):
+    id: str
+    title: str
+
+
 class BaseProgressInfo(TypedDict):
     status: str
-    info_dict: dict[str, Any]
+    info_dict: InfoDict
 
 
 class ErrorProgressInfo(BaseProgressInfo):
