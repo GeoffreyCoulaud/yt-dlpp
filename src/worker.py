@@ -1,14 +1,19 @@
 import sys
 from abc import abstractmethod
 from contextlib import redirect_stderr, redirect_stdout
-from multiprocessing import JoinableQueue, Process
+from multiprocessing import Process
 from os import devnull
 from typing import Any, Generic, Sequence, TypeVar
 
-TaskValueT = TypeVar("TaskValueT")
+# HACK: Type hints are bad, but it's not my fault.
+# mutiprocessing queues don't support type hints, for some god-forsaken reason.
+# See https://github.com/python/cpython/issues/99509
+
+TaskInputValueT = TypeVar("TaskInputValueT")
+TaskOutputValueT = TypeVar("TaskOutputValueT")
 
 
-class WorkerInterface(Generic[TaskValueT]):
+class WorkerInterface(Generic[TaskInputValueT, TaskOutputValueT]):
     """Base class for Worker and WorkerPool"""
 
     @abstractmethod
@@ -16,7 +21,7 @@ class WorkerInterface(Generic[TaskValueT]):
         """Start the worker"""
 
     @abstractmethod
-    def get_input_queue(self) -> JoinableQueue[None | TaskValueT]:
+    def get_input_queue(self) -> Any:
         """Get the worker's input queue"""
 
     @abstractmethod
@@ -24,40 +29,27 @@ class WorkerInterface(Generic[TaskValueT]):
         """Signal to the worker to exit"""
 
 
-class Worker(
-    Process,
-    WorkerInterface[TaskValueT],
-    Generic[TaskValueT],
-):
+class Worker(Process, WorkerInterface[TaskInputValueT, TaskOutputValueT]):
     """Worker process with input and output queues"""
-
-    # HACK: type keyword is python 3.12 only
-    # type WorkerQueue = JoinableQueue[None, TaskValueT]
-    # type OptionalWorkerQueue = None | WorkerQueue
-    _WorkerQueue = JoinableQueue[None | Any]
-    _OptionalWorkerQueue = None | _WorkerQueue
 
     # --- Protected methods
 
-    input_queue: _WorkerQueue
-    output_queue: _OptionalWorkerQueue
-
-    def _send_output(self, value: TaskValueT) -> None:
+    def _send_output(self, value: TaskOutputValueT) -> None:
         """Send an item to the output queue if it exists, else do nothing"""
         if self.output_queue is None:
             return
         self.output_queue.put(value)
 
     @abstractmethod
-    def _process_item(self, item: TaskValueT) -> Sequence[TaskValueT]:
+    def _process_item(self, item: TaskInputValueT) -> Sequence[Any]:
         """Process an item from the queue and return results to the output queue."""
 
     # --- Init
 
     def __init__(
         self,
-        input_queue: _WorkerQueue,
-        output_queue: _OptionalWorkerQueue,
+        input_queue: Any,
+        output_queue: None | Any,
     ) -> None:
         super(Process, self).__init__(daemon=True)
         self.input_queue = input_queue
@@ -65,12 +57,12 @@ class Worker(
 
     # --- Public methods
 
-    def run(self) -> None:
+    def run(self):
         """Subprocess' main function"""
 
         while True:
             # Process the next item
-            item: TaskValueT = self.input_queue.get()
+            item: TaskInputValueT = self.input_queue.get()
             results = []
             if item is not None:
                 results.extend(self._process_item(item))
@@ -85,20 +77,20 @@ class Worker(
         # Exit gracefuly
         sys.exit(0)
 
-    def start(self) -> None:
+    def start(self):
         super(Process, self).start()
 
-    def dismiss(self) -> None:
+    def dismiss(self):
         self.input_queue.put(None)
 
-    def get_input_queue(self) -> JoinableQueue[None | TaskValueT]:
+    def get_input_queue(self):
         return self.input_queue
 
 
-class SilentWorker(Worker):
+class SilentWorker(Worker[TaskInputValueT, TaskOutputValueT]):
     """Worker that cannot print to stdout and stderr"""
 
-    def run(self) -> None:
+    def run(self):
         with (
             open(devnull, "w") as shadow_realm,  # Yup.
             redirect_stdout(shadow_realm),
@@ -107,16 +99,16 @@ class SilentWorker(Worker):
             super().run()
 
 
-class WorkerPool(WorkerInterface[TaskValueT]):
+class WorkerPool(WorkerInterface[TaskInputValueT, TaskOutputValueT]):
     """Pool of workers sharing an input queue"""
 
     # --- Protected methods
 
-    __workers: tuple[Worker]
+    __workers: tuple[Worker[TaskInputValueT, TaskOutputValueT]]
 
     # --- Init
 
-    def __init__(self, *workers: Worker) -> None:
+    def __init__(self, *workers: Worker):
         """
         Intitialize a Pool\n
         It is critical that workers share their input queue.
@@ -138,13 +130,13 @@ class WorkerPool(WorkerInterface[TaskValueT]):
 
     # --- Public methods
 
-    def start(self) -> None:
+    def start(self):
         for worker in self.__workers:
             worker.start()
 
-    def dismiss(self) -> None:
+    def dismiss(self):
         for worker in self.__workers:
             worker.dismiss()
 
-    def get_input_queue(self) -> JoinableQueue[None | TaskValueT]:
+    def get_input_queue(self):
         return self.__workers[0].get_input_queue()
