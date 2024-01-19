@@ -45,6 +45,7 @@ def main():
     options, cli_urls = ydl_parser.parse_args(args=ydl_args)
     if not isinstance(options, dict):
         raise ValueError("Options cannot be parsed to a dict")
+    options["quiet"] = True
 
     # Create the queues
     generic_url_queue = JoinableQueue()
