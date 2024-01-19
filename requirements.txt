@@ -1,2 +1,2 @@
 yt_dlp
-tqdm
+rich
