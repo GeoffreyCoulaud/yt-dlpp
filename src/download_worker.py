@@ -1,6 +1,6 @@
 from functools import partial
 from multiprocessing import JoinableQueue, Queue
-from typing import Any, Optional
+from typing import Any
 
 from yt_dlp import YoutubeDL
 

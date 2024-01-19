@@ -1,6 +1,8 @@
 import sys
 from abc import abstractmethod
+from contextlib import redirect_stderr, redirect_stdout
 from multiprocessing import JoinableQueue, Process
+from os import devnull
 from typing import Any, Generic, Sequence, TypeVar
 
 TaskValueT = TypeVar("TaskValueT")
@@ -91,6 +93,18 @@ class Worker(
 
     def get_input_queue(self) -> JoinableQueue[None | TaskValueT]:
         return self.input_queue
+
+
+class SilentWorker(Worker):
+    """Worker that cannot print to stdout and stderr"""
+
+    def run(self) -> None:
+        with (
+            open(devnull, "w") as shadow_realm,  # Yup.
+            redirect_stdout(shadow_realm),
+            redirect_stderr(shadow_realm),
+        ):
+            super().run()
 
 
 class WorkerPool(WorkerInterface[TaskValueT]):
