@@ -4,8 +4,8 @@ from typing import Any
 
 from yt_dlp import YoutubeDL
 
-from src.progress_info import ProgressInfo
-from worker import Worker
+from yt_dlpp.workers.progress_info import ProgressInfo
+from yt_dlpp.workers.worker import Worker
 
 
 class DownloadWorker(Worker):

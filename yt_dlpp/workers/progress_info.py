@@ -1,4 +1,4 @@
-from typing import Any, Literal, NotRequired, Optional, TypedDict
+from typing import Literal, NotRequired, Optional, TypedDict
 
 
 class InfoDict(TypedDict):

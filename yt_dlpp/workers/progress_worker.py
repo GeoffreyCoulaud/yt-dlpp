@@ -10,14 +10,14 @@ from rich.progress import (
     TotalFileSizeColumn,
     TransferSpeedColumn,
 )
-
-from src.progress_info import (
+from yt_dlppworkers.progress_info import (
     DownloadProgressInfo,
     ErrorProgressInfo,
     FinishedProgressInfo,
     ProgressInfo,
 )
-from worker import Worker
+
+from yt_dlpp.workers.worker import Worker
 
 
 class ProgressWorker(Worker):

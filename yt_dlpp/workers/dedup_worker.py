@@ -1,4 +1,4 @@
-from worker import Worker
+from yt_dlpp.workers.worker import Worker
 
 
 class DedupWorker(Worker[str, str]):

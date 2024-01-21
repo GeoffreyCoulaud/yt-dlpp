@@ -3,7 +3,7 @@ from typing import Any
 
 from yt_dlp import YoutubeDL
 
-from worker import Worker
+from yt_dlpp.workers.worker import Worker
 
 
 class InfoWorker(Worker[str, str]):
