@@ -125,7 +125,7 @@ class WorkerPool(WorkerInterface[TaskInputValueT, TaskOutputValueT]):
         Create a worker pool containing n workers of the given class
         with all the same constructor args
         """
-        workers = (klass(*args) for _ in n)
+        workers = (klass(*args) for _ in range(n))
         return WorkerPool(*workers)
 
     # --- Public methods

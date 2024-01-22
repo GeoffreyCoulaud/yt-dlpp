@@ -14,6 +14,9 @@ keywords = [
 ]
 readme = "README.md"
 license = {text = "GPLv3"}
+authors = [
+	{ name = "Geoffrey Coulaud", email = "geoffrey.coulaud@gmail.com" },
+]
 classifiers = [
 	"License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
 	"Programming Language :: Python :: 3.11",

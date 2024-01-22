@@ -2,7 +2,7 @@ import argparse
 import sys
 from multiprocessing import JoinableQueue, cpu_count
 
-from yt_dlp.options import create_parser as create_ydl_parser
+from yt_dlp import parse_options
 
 from yt_dlpp.workers.dedup_worker import DedupWorker
 from yt_dlpp.workers.download_worker import DownloadWorker
@@ -40,11 +40,12 @@ def main():
     args, ydl_args = parser.parse_known_args()
 
     # Parse the yt-dlp arguments
-    ydl_parser = create_ydl_parser()
-    options, cli_urls = ydl_parser.parse_args(args=ydl_args)
-    if not isinstance(options, dict):
-        raise ValueError("Options cannot be parsed to a dict")
-    options["quiet"] = True
+    ydl_parsed = parse_options(ydl_args)
+    cli_urls = ydl_parsed.urls
+    ydl_options = ydl_parsed.ydl_opts
+
+    # Make yt-dlp quiet, since we handle printing
+    ydl_options["quiet"] = True
 
     # Create the queues
     generic_url_queue = JoinableQueue()
@@ -57,7 +58,9 @@ def main():
         WorkerPool.from_class(
             args.n_info_workers,
             InfoWorker,
-            (options, generic_url_queue, video_url_queue),
+            ydl_options,
+            generic_url_queue,
+            video_url_queue,
         ),
         DedupWorker(
             video_url_queue,
@@ -66,7 +69,9 @@ def main():
         WorkerPool.from_class(
             args.n_dl_workers,
             DownloadWorker,
-            (options, unique_video_url_queue, progress_queue),
+            ydl_options,
+            unique_video_url_queue,
+            progress_queue,
         ),
         ProgressWorker(
             progress_queue,
