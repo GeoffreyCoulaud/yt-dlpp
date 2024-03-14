@@ -41,7 +41,7 @@ class ProgressWorker(Worker):
         with Progress(*columns) as self._progress_bar:
             super().run()
 
-    def _process_item(self, progress_info: ProgressInfo) -> None:
+    def _process_item(self, progress_info: dict) -> None:
         # Get current info
         item_id = progress_info["info_dict"]["id"]
         total_bytes = progress_info.get("total_bytes")
