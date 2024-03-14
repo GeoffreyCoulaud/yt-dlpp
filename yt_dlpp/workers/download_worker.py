@@ -36,7 +36,7 @@ class DownloadWorker(Worker):
 
     @property
     @lru_cache(maxsize=1)
-    def _base_command(self) -> tuple(str):
+    def _base_command(self) -> tuple[str]:
         _progress_template = (
             "{"
             + '"video": %(info.{id,original_url,title})j,'

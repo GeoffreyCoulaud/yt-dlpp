@@ -1,15 +1,24 @@
 import argparse
+import logging
 import sys
 from multiprocessing import JoinableQueue, cpu_count
-from typing import Any
-
-from yt_dlp import parse_options
+from os import getenv
 
 from yt_dlpp.workers.dedup_worker import DedupWorker
 from yt_dlpp.workers.download_worker import DownloadWorker
 from yt_dlpp.workers.info_worker import InfoWorker
 from yt_dlpp.workers.progress_worker import ProgressWorker
 from yt_dlpp.workers.worker import WorkerInterface, WorkerPool
+
+
+def _setup_logging() -> None:
+    """Setup the logging"""
+    log_levels = logging.getLevelNamesMapping()
+    log_level = log_levels[getenv("LOG_LEVEL", "INFO")]
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
 
 
 def _create_main_parser() -> argparse.ArgumentParser:
@@ -77,9 +86,14 @@ def _create_ydl_interceptor_parser() -> argparse.ArgumentParser:
 def main():
     """App entry point"""
 
+    # Enable logging to debug if needed
+    _setup_logging()
+    logging.debug("Logging setup")
+
     # Parse the main arguments
     parser = _create_main_parser()
     args, raw_ydl_args = parser.parse_known_args()
+    logging.debug("Parsed yt-dlpp args")
 
     # Intercept some yt-dlp args
     interceptor_parser = _create_ydl_interceptor_parser()
@@ -87,12 +101,14 @@ def main():
         raw_ydl_args
     )
     cli_urls = intercepted_ydl_args.urls
+    logging.debug("Intercepted unwanted yt-dlp args")
 
     # Create the queues
     generic_url_queue = JoinableQueue()
     video_url_queue = JoinableQueue()
     unique_video_url_queue = JoinableQueue()
     progress_queue = JoinableQueue()
+    logging.debug("Queues created")
 
     # Create the workers
     workers: tuple[WorkerInterface] = (
@@ -118,21 +134,28 @@ def main():
             progress_queue,
         ),
     )
+    logging.debug("Workers created")
 
     # Start the workers
     for worker in workers:
         worker.start()
+    logging.debug("Workers started")
 
     # Send the initial URLs to the queue
     for cli_url in cli_urls:
         generic_url_queue.put(cli_url)
+    logging.debug("Initial URLs sent to the queue")
 
     # Wait for every step to finish, one after the other
-    for worker in workers:
+    for i, worker in enumerate(workers):
         worker.dismiss()
+        logging.debug(f"Dismissed worker {i}")
         worker_input_queue = worker.get_input_queue()
         worker_input_queue.close()
+        logging.debug(f"Closed worker {i} input queue")
         worker_input_queue.join()
+        logging.debug(f"Worker {i} input queue joined")
+    logging.debug("All workers finished")
 
     # If all went well, all of our workers finished
     # The remaining ones will be killed at exit since they're daemon processes

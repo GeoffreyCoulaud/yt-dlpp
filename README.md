@@ -6,6 +6,19 @@ A thin wrapper around [`yt-dlp`](https://github.com/yt-dlp/yt-dlp) for parallel 
 `yt-dlpp` is just `yt-dlp` but starts downloads in parallel.   
 It supports passing multiple download URLs and unwrapping playlists.
 
+## Installation
+
+### Build locally on Linux
+
+```sh
+git clone "$YT_DLPP_REPO"
+cd yt-dlpp
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install 
+```
+
 ## Usage
 
 `yt-dlpp` accepts all valid `yt-dlp` arguments and passes them mostly intact.  
