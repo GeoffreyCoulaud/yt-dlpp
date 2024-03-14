@@ -14,7 +14,7 @@ from yt_dlpp.workers.worker import WorkerInterface, WorkerPool
 def _setup_logging() -> None:
     """Setup the logging"""
     log_levels = logging.getLevelNamesMapping()
-    log_level = log_levels[getenv("LOG_LEVEL", "INFO")]
+    log_level = log_levels[getenv("LOG_LEVEL", "ERROR")]
     logging.basicConfig(
         level=log_level,
         format="%(asctime)s - [%(processName)s - %(levelname)s] %(message)s",

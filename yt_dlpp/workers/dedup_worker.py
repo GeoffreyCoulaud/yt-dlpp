@@ -1,3 +1,5 @@
+import logging
+
 from yt_dlpp.workers.worker import Worker
 
 
@@ -12,6 +14,8 @@ class DedupWorker(Worker[str, str]):
 
     def _process_item(self, item):
         if item in self._seen:
+            logging.debug("Skipping duplicate item: %s", item)
             return
+        logging.debug("Relaying item: %s", item)
         self._seen.add(item)
         self._send_output(item)

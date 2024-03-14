@@ -33,8 +33,6 @@ class InfoWorker(Worker[str, str]):
         parser.add_argument("--no-simulate")
         _, allowed_ydl_args = parser.parse_known_args(ydl_args)
         self._base_command = (
-            "python3",
-            "-m",
             "yt-dlp",
             "--dump-json",
             *allowed_ydl_args,
@@ -49,6 +47,7 @@ class InfoWorker(Worker[str, str]):
         Process an input url to be handled by yt-dlp (may be a video or a playlist)
         and pass video urls to the output queue
         """
+        logging.debug("Processing url: %s", item)
 
         # Call yt-dlp in a subprocess
         try:
@@ -58,8 +57,8 @@ class InfoWorker(Worker[str, str]):
                 check=True,
                 encoding="utf-8",
             )
-        except CalledProcessError:
-            logging.error("Failed to get info from url: %s", item)
+        except CalledProcessError as e:
+            logging.error("Failed to get info from url %s: %s", item, e)
             return
 
         # Extract video URLs (one video infojson per line)
@@ -80,5 +79,5 @@ class InfoWorker(Worker[str, str]):
             if video_url is None:
                 logging.debug("No video URL in infojson: %s", video_info_dict)
                 continue
-            logging.info("Got video URL from yt-dlp: %s", video_url)
+            logging.debug("Got video URL from yt-dlp: %s", video_url)
             self._send_output(video_url)

@@ -1,8 +1,9 @@
 import json
+import logging
 from functools import lru_cache
 from multiprocessing import JoinableQueue
 from subprocess import PIPE, Popen
-from typing import Literal, NamedTuple, Sequence, TypedDict
+from typing import Literal, Sequence, TypedDict
 
 from yt_dlpp.workers.worker import Worker
 
@@ -16,6 +17,7 @@ class _VideoSubdict(TypedDict):
 class _ProgressSubdict(TypedDict):
     downloaded_bytes: int
     total_bytes: int
+    total_bytes_estimate: int
     eta: Literal["NA"] | float
     speed: Literal["NA"] | float
     elapsed: float
@@ -45,8 +47,6 @@ class DownloadWorker(Worker):
         )
         """Generate the base command"""
         return (
-            "python3",
-            "-m",
             "yt-dlp",
             "--quiet",
             "--progress",
@@ -67,6 +67,7 @@ class DownloadWorker(Worker):
 
     def _process_item(self, item: str) -> None:
         # Download the video
+        logging.debug("Starting download for %s", item)
         process = Popen(
             (*self._base_command, item),
             encoding="utf-8",
@@ -76,4 +77,6 @@ class DownloadWorker(Worker):
         )
         # Get progress as soon as a line is available
         for line in process.stdout:
-            self._send_output(line)
+            parsed_line: ProgressLineDict = json.loads(line)
+            self._send_output(parsed_line)
+        logging.debug("Download finished for %s", item)
