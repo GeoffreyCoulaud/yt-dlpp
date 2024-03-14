@@ -11,12 +11,6 @@ from rich.progress import (
     TransferSpeedColumn,
 )
 
-from yt_dlpp.workers.progress_info import (
-    DownloadProgressInfo,
-    ErrorProgressInfo,
-    FinishedProgressInfo,
-    ProgressInfo,
-)
 from yt_dlpp.workers.worker import Worker
 
 

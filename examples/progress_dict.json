@@ -1,0 +1,19 @@
+{
+	"status": "downloading",
+	"downloaded_bytes": 10382674,
+	"total_bytes": 68615912,
+	"tmpfilename": "Wisdom From Linus ｜ Prime Reacts [EvzB_Q1gSds].f303.webm.part",
+	"filename": "Wisdom From Linus ｜ Prime Reacts [EvzB_Q1gSds].f303.webm",
+	"eta": 1,
+	"speed": 46062020.46010851,
+	"elapsed": 0.5455968379974365,
+	"ctx_id": "None",
+	"_eta_str": "\\x1b[0;33m00:01\\x1b[0m",
+	"_speed_str": "\\x1b[0;32m  43.93MiB/s\\x1b[0m",
+	"_percent_str": "\\x1b[0;94m 15.1%\\x1b[0m",
+	"_total_bytes_str": "  65.44MiB",
+	"_total_bytes_estimate_str": "       N/A",
+	"_downloaded_bytes_str": "\\x1b[0;94m   9.90MiB\\x1b[0m",
+	"_elapsed_str": "\\x1b[1;37m00:00:00\\x1b[0m",
+	"_default_template": "\\x1b[0;94m 15.1%\\x1b[0m of   65.44MiB at \\x1b[0;32m  43.93MiB/s\\x1b[0m ETA \\x1b[0;33m00:01\\x1b[0m"
+}

@@ -1,6 +1,7 @@
 import argparse
 import sys
 from multiprocessing import JoinableQueue, cpu_count
+from typing import Any
 
 from yt_dlp import parse_options
 
@@ -11,19 +12,15 @@ from yt_dlpp.workers.progress_worker import ProgressWorker
 from yt_dlpp.workers.worker import WorkerInterface, WorkerPool
 
 
-class _MainArgs(argparse.Namespace):
-    n_info_workers: int
-    n_dl_workers: int
+def _create_main_parser() -> argparse.ArgumentParser:
+    """Create the main yt-dlpp parser"""
 
-
-def main():
-    """App entry point"""
-
-    # Parse the main arguments
     parser = argparse.ArgumentParser(
         description="A wrapper to download content using yt-dlp in parallel",
         epilog="See `yt-dlp --help` for more CLI options",
+        allow_abbrev=False,
     )
+
     parser.add_argument(
         "--n-info-workers",
         type=int,
@@ -36,16 +33,60 @@ def main():
         default=cpu_count(),
         help="Number of download workers to use",
     )
-    args: _MainArgs
-    args, ydl_args = parser.parse_known_args()
 
-    # Parse the yt-dlp arguments
-    ydl_parsed = parse_options(ydl_args)
-    cli_urls = ydl_parsed.urls
-    ydl_options = ydl_parsed.ydl_opts
+    return parser
 
-    # Make yt-dlp quiet, since we handle printing
-    ydl_options["quiet"] = True
+
+def _create_ydl_interceptor_parser() -> argparse.ArgumentParser:
+    """
+    Create a dummy yt-dlp parser to intercept some arguments
+
+    In charge of neutralizing arguments that change the output and would prevent
+    yt-dlpp from working as intended.
+
+    Also catches the URLs positionned at the end of the args.
+    """
+
+    parser = argparse.ArgumentParser(allow_abbrev=False)
+
+    # stdout format - We want to read from it programmatically
+    parser.add_argument("--quiet", "-q")
+    parser.add_argument("--no-quiet")
+    parser.add_argument("--print", "-O")
+    parser.add_argument("--verbose", "-v")
+    parser.add_argument("--dump-pages")
+    parser.add_argument("--print-traffic")
+
+    # Progress options - We disable it to handle progress manually
+    parser.add_argument("--newline")
+    parser.add_argument("--no-progress")
+    parser.add_argument("--progress")
+    parser.add_argument("--console-title")
+    parser.add_argument("--progress-template")
+
+    # JSON dump - We set it manually
+    parser.add_argument("--dump-json")
+    parser.add_argument("--dump-single-json")
+
+    # URLs at the end - We want to use those directly
+    parser.add_argument("urls", nargs="+")
+
+    return parser
+
+
+def main():
+    """App entry point"""
+
+    # Parse the main arguments
+    parser = _create_main_parser()
+    args, raw_ydl_args = parser.parse_known_args()
+
+    # Intercept some yt-dlp args
+    interceptor_parser = _create_ydl_interceptor_parser()
+    intercepted_ydl_args, kept_ydl_args = interceptor_parser.parse_known_args(
+        raw_ydl_args
+    )
+    cli_urls = intercepted_ydl_args.urls
 
     # Create the queues
     generic_url_queue = JoinableQueue()
@@ -58,7 +99,7 @@ def main():
         WorkerPool.from_class(
             args.n_info_workers,
             InfoWorker,
-            ydl_options,
+            kept_ydl_args,
             generic_url_queue,
             video_url_queue,
         ),
@@ -69,7 +110,7 @@ def main():
         WorkerPool.from_class(
             args.n_dl_workers,
             DownloadWorker,
-            ydl_options,
+            kept_ydl_args,
             unique_video_url_queue,
             progress_queue,
         ),

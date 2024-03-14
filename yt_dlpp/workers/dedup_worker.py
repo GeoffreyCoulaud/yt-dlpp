@@ -12,6 +12,6 @@ class DedupWorker(Worker[str, str]):
 
     def _process_item(self, item):
         if item in self._seen:
-            return []
+            return
         self._seen.add(item)
-        return [item]
+        self._send_output(item)

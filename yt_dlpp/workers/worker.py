@@ -41,8 +41,8 @@ class Worker(Process, WorkerInterface[TaskInputValueT, TaskOutputValueT]):
         self.output_queue.put(value)
 
     @abstractmethod
-    def _process_item(self, item: TaskInputValueT) -> Sequence[Any]:
-        """Process an item from the queue and return results to the output queue."""
+    def _process_item(self, item: TaskInputValueT) -> None:
+        """Process an item and pass results to the output queue"""
 
     # --- Init
 
@@ -63,11 +63,8 @@ class Worker(Process, WorkerInterface[TaskInputValueT, TaskOutputValueT]):
         while True:
             # Process the next item
             item: TaskInputValueT = self.input_queue.get()
-            results = []
             if item is not None:
-                results.extend(self._process_item(item))
-            for result in results:
-                self._send_output(result)
+                self._process_item(item)
             self.input_queue.task_done()
 
             # Stop if requested to
@@ -85,18 +82,6 @@ class Worker(Process, WorkerInterface[TaskInputValueT, TaskOutputValueT]):
 
     def get_input_queue(self):
         return self.input_queue
-
-
-class SilentWorker(Worker[TaskInputValueT, TaskOutputValueT]):
-    """Worker that cannot print to stdout and stderr"""
-
-    def run(self):
-        with (
-            open(devnull, "w") as shadow_realm,  # Yup.
-            redirect_stdout(shadow_realm),
-            redirect_stderr(shadow_realm),
-        ):
-            super().run()
 
 
 class WorkerPool(WorkerInterface[TaskInputValueT, TaskOutputValueT]):

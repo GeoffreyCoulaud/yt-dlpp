@@ -1,45 +1,79 @@
-from functools import partial
-from multiprocessing import JoinableQueue, Queue
-from typing import Any
+import json
+from functools import lru_cache
+from multiprocessing import JoinableQueue
+from subprocess import PIPE, Popen
+from typing import Literal, NamedTuple, Sequence, TypedDict
 
-from yt_dlp import YoutubeDL
-
-from yt_dlpp.workers.progress_info import ProgressInfo
 from yt_dlpp.workers.worker import Worker
+
+
+class _VideoSubdict(TypedDict):
+    id: str
+    original_url: str
+    title: str
+
+
+class _ProgressSubdict(TypedDict):
+    downloaded_bytes: int
+    total_bytes: int
+    eta: Literal["NA"] | float
+    speed: Literal["NA"] | float
+    elapsed: float
+
+
+class ProgressLineDict(TypedDict):
+    video: _VideoSubdict
+    progress: _ProgressSubdict
 
 
 class DownloadWorker(Worker):
     """Worker process that downloads from yt-dlp video urls"""
 
     input_queue: JoinableQueue
-    output_queue: Queue
+    output_queue: JoinableQueue
 
-    _ydl: YoutubeDL
+    _ydl_args: Sequence[str]
+
+    @property
+    @lru_cache(maxsize=1)
+    def _base_command(self) -> tuple(str):
+        _progress_template = (
+            "{"
+            + '"video": %(info.{id,original_url,title})j,'
+            + '"progress": %(progress.{downloaded_bytes,total_bytes,eta,speed,elapsed})j'
+            + "}"
+        )
+        """Generate the base command"""
+        return (
+            "python3",
+            "-m",
+            "yt-dlp",
+            "--quiet",
+            "--progress",
+            "--newline",
+            "--progress-template",
+            _progress_template,
+            *self._ydl_args,
+        )
 
     def __init__(
         self,
-        options: dict[str, Any],
+        ydl_args: Sequence[str],
         input_queue: JoinableQueue,
-        output_queue: Queue,
+        output_queue: JoinableQueue,
     ) -> None:
-        """
-        Initialize a DownloadWorker object.
-
-        Notes:
-        - The options are copied when passed to the constructor
-        """
         super().__init__(input_queue, output_queue)
-
-        # Build the ydl object
-        options = dict(options)  # Make a copy to not mess with other options users
-        hook = partial(self._progress_hook, progress_queue=self.output_queue)
-        options["progress_hooks"] = [hook]
-        self._ydl = YoutubeDL(options)
-
-    def _progress_hook(progress_info: ProgressInfo, *, progress_queue: Queue) -> Any:
-        """yt-dlp progress hook relaying the progress info to the progress queue."""
-        progress_queue.put(progress_info)
+        self._ydl_args = ydl_args
 
     def _process_item(self, item: str) -> None:
         # Download the video
-        self._ydl.download(item)
+        process = Popen(
+            (*self._base_command, item),
+            encoding="utf-8",
+            bufsize=1,
+            universal_newlines=True,
+            stdout=PIPE,
+        )
+        # Get progress as soon as a line is available
+        for line in process.stdout:
+            self._send_output(line)

@@ -1,7 +1,8 @@
+import json
+from argparse import ArgumentParser
 from multiprocessing import JoinableQueue
-from typing import Any
-
-from yt_dlp import YoutubeDL
+from subprocess import CalledProcessError, run
+from typing import Sequence
 
 from yt_dlpp.workers.worker import Worker
 
@@ -16,29 +17,57 @@ class InfoWorker(Worker[str, str]):
     input_queue: JoinableQueue
     output_queue: JoinableQueue
 
-    _ydl: YoutubeDL
+    _base_command: Sequence[str]
 
     def __init__(
         self,
-        options: dict[str, Any],
+        ydl_args: Sequence[str],
         input_queue: JoinableQueue,
         output_queue: JoinableQueue,
     ) -> None:
         super().__init__(input_queue, output_queue)
-        self._ydl = YoutubeDL(options)
+        # Define base command args
+        # (removes --no-simulate from ydl args at info stage)
+        parser = ArgumentParser()
+        parser.add_argument("--no-simulate")
+        _, allowed_ydl_args = parser.parse_known_args(ydl_args)
+        self._base_command = (
+            "python3",
+            "-m",
+            "yt-dlp",
+            "--dump-json",
+            *allowed_ydl_args,
+        )
 
-    def _process_item(self, item: str) -> list[str]:
-        # Get the information for the url
-        info = self._ydl.extract_info(item)
+    def _process_item(self, item: str) -> None:
+        """
+        Process an input url to be handled by yt-dlp (may be a video or a playlist)
+        and pass video urls to the output queue
+        """
 
-        # Ensure that info is valid
-        if not isinstance(info, dict):
-            return []
-        if (info_type := info.get("_type")) not in ("video", "playlist"):
-            return []
+        # Call yt-dlp in a subprocess
+        try:
+            completed_process = run(
+                (*self._base_command, item),
+                capture_output=True,
+                check=True,
+                encoding="utf-8",
+            )
+        except CalledProcessError:
+            return
 
-        # Extract the video urls
-        infos = [info] if info_type == "video" else info["entries"]
-        urls = [url for info in infos if (url := info.get("original_url")) is not None]
-
-        return urls
+        # Extract video URLs (one video infojson per line)
+        for output_line in completed_process.stdout.splitlines():
+            stripped_line = output_line.strip()
+            if len(stripped_line) == 0:
+                continue
+            try:
+                video_info_dict = json.loads(stripped_line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(video_info_dict, dict):
+                continue
+            video_url = video_info_dict.get("original_url")
+            if video_url is None:
+                continue
+            self._send_output(video_url)
