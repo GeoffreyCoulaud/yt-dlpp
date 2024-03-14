@@ -141,6 +141,7 @@ def main():
         worker.start()
 
     # Send the initial URLs to the queue
+    print("Getting video info...")
     logging.debug("Sending initial URLs to the queue")
     for cli_url in cli_urls:
         logging.debug(f"\t {cli_url}")
