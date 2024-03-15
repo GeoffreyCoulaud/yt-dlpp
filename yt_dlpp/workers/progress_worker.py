@@ -98,7 +98,6 @@ class ProgressWorker(Worker):
         self, video_id: str, downloaded_bytes: float, total_bytes: float
     ) -> None:
         """Update the progress task for a video ID"""
-        logging.debug("Updating progress task for %s", video_id)
         task_id = self._tasks[video_id]["task_id"]
         self._progress_bar.update(
             task_id,
@@ -108,7 +107,6 @@ class ProgressWorker(Worker):
 
     def _process_item(self, progress_info: ProgressLineDict) -> None:
         # Get current info
-        logging.debug("Processing progress info")
         video_id = progress_info["video"]["id"]
         total_bytes = self._get_progress_info_total_bytes(progress_info)
         downloaded_bytes = self._get_progress_info_downloaded_bytes(progress_info)

@@ -125,35 +125,29 @@ def main():
         ),
     )
 
-    # Wrap everything in a try/except to handle KeyboardInterrupt gracefully
-    try:
+    # Start the workers
+    logging.debug("Starting workers")
+    for worker in workers:
+        worker.start()
 
-        # Start the workers
-        logging.debug("Starting workers")
-        for worker in workers:
-            worker.start()
+    # Send the initial URLs to the queue
+    print("Getting video info...")
+    logging.debug("Sending initial URLs to the queue")
+    for url in urls:
+        logging.debug("\t %s", url)
+        input_url_queue.put(url)
 
-        # Send the initial URLs to the queue
-        print("Getting video info...")
-        logging.debug("Sending initial URLs to the queue")
-        for url in urls:
-            logging.debug("\t %s", url)
-            input_url_queue.put(url)
-
-        # Wait for every step to finish, one after the other
-        for i, worker in enumerate(workers):
-            kind = "WorkerPool" if isinstance(worker, WorkerPool) else "Worker"
-            logging.debug("Waiting for %s %d to finish", kind, i)
-            worker.dismiss()
-            logging.debug("Dismissed %s %d", kind, i)
-            worker_input_queue = worker.get_input_queue()
-            worker_input_queue.close()
-            worker_input_queue.join()
-            logging.debug("%s %d finished", kind, i)
-        logging.debug("All workers finished")
-
-    except KeyboardInterrupt:
-        print("Interrupted by user")
+    # Wait for every step to finish, one after the other
+    for i, worker in enumerate(workers):
+        kind = "WorkerPool" if isinstance(worker, WorkerPool) else "Worker"
+        logging.debug("Waiting for %s %d to finish", kind, i)
+        worker.dismiss()
+        logging.debug("Dismissed %s %d", kind, i)
+        worker_input_queue = worker.get_input_queue()
+        worker_input_queue.close()
+        worker_input_queue.join()
+        logging.debug("%s %d finished", kind, i)
+    logging.debug("All workers finished")
 
     # If all went well, all of our workers finished
     # The remaining ones will be killed at exit since they're daemon processes

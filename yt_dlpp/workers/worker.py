@@ -1,7 +1,6 @@
 import sys
 from abc import abstractmethod
 from multiprocessing import Process
-from signal import SIGINT, signal
 from typing import Any, Generic, TypeVar
 
 # HACK: Type hints are bad, but it's not my fault.
@@ -58,10 +57,6 @@ class Worker(Process, WorkerInterface[TaskInputValueT, TaskOutputValueT]):
 
     def run(self):
         """Subprocess' main function"""
-
-        # Set up signal handling
-        signal(SIGINT, lambda _signum, _frame: sys.exit(0))
-
         while True:
             # Process the next item
             item: TaskInputValueT = self.input_queue.get()
