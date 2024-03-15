@@ -1,9 +1,8 @@
 import sys
 from abc import abstractmethod
-from contextlib import redirect_stderr, redirect_stdout
 from multiprocessing import Process
-from os import devnull
-from typing import Any, Generic, Sequence, TypeVar
+from signal import SIGINT, signal
+from typing import Any, Generic, TypeVar
 
 # HACK: Type hints are bad, but it's not my fault.
 # mutiprocessing queues don't support type hints, for some god-forsaken reason.
@@ -59,6 +58,9 @@ class Worker(Process, WorkerInterface[TaskInputValueT, TaskOutputValueT]):
 
     def run(self):
         """Subprocess' main function"""
+
+        # Set up signal handling
+        signal(SIGINT, lambda _signum, _frame: sys.exit(0))
 
         while True:
             # Process the next item

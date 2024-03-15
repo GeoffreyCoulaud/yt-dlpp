@@ -1,10 +1,11 @@
-import argparse
 import logging
 import sys
+from argparse import ArgumentParser, Namespace
 from multiprocessing import JoinableQueue, cpu_count
 from os import getenv
+from typing import Optional, Sequence
 
-from yt_dlpp.interceptors import UrlInterceptor
+from yt_dlpp.interceptors.interceptor import InputUrlsInterceptor
 from yt_dlpp.workers.dedup_worker import DedupWorker
 from yt_dlpp.workers.download_worker import DownloadWorker
 from yt_dlpp.workers.info_worker import InfoWorker
@@ -22,29 +23,41 @@ def _setup_logging() -> None:
     )
 
 
-def _create_ytdlpp_parser() -> argparse.ArgumentParser:
-    """Create the main yt-dlpp parser"""
+class YtdlppParserNamespace(Namespace):
+    """Namespace for yt-dlpp parser args"""
 
-    parser = argparse.ArgumentParser(
-        description="A wrapper to download content using yt-dlp in parallel",
-        epilog="See `yt-dlp --help` for more CLI options",
-        allow_abbrev=False,
-    )
+    n_info_workers: int
+    n_dl_workers: int
 
-    parser.add_argument(
-        "--n-info-workers",
-        type=int,
-        default=cpu_count(),
-        help="Number of info workers to use",
-    )
-    parser.add_argument(
-        "--n-dl-workers",
-        type=int,
-        default=cpu_count(),
-        help="Number of download workers to use",
-    )
 
-    return parser
+class YtdlppParser(ArgumentParser):
+    """Parser for yt-dlpp"""
+
+    def __init__(self) -> None:
+        super().__init__(
+            description="A wrapper to download content using yt-dlp in parallel",
+            epilog="See `yt-dlp --help` for more CLI options",
+            allow_abbrev=False,
+        )
+        self.add_argument(
+            "--n-info-workers",
+            type=int,
+            default=cpu_count(),
+            help="Number of info workers to use",
+        )
+        self.add_argument(
+            "--n-dl-workers",
+            type=int,
+            default=cpu_count(),
+            help="Number of download workers to use",
+        )
+
+    def parse_known_args(
+        self,
+        args: Optional[Sequence[str]] = None,
+        namespace: Optional[Namespace] = None,
+    ) -> tuple[YtdlppParserNamespace, list[str]]:
+        return super().parse_known_args(args, namespace)
 
 
 def main():
@@ -55,18 +68,33 @@ def main():
 
     # Parse the main arguments
     logging.debug("Parsing yt-dlpp args")
-    parser = _create_ytdlpp_parser()
-    args, raw_ydl_args = parser.parse_known_args()
+    args, raw_ydtdlp_args = YtdlppParser().parse_known_args()
 
     # Intercept some yt-dlp args
     logging.debug("Intercepting yt-dlp arguments")
-    interceptor = UrlInterceptor()
-    intercepted_args, other_args = interceptor.parse_known_args(raw_ydl_args)
-    cli_urls = intercepted_args.urls
+    input_urls_args, ytdlp_args = InputUrlsInterceptor().parse_known_args(
+        raw_ydtdlp_args
+    )
+
+    # Get the input URLs
+    urls = []
+    if input_urls_args.urls:
+        urls.extend(input_urls_args.urls)
+    if input_urls_args.batch_file:
+        logging.debug("Reading URLs from batch file: %s", input_urls_args.batch_file)
+        try:
+            with open(input_urls_args.batch_file, "r") as file:
+                lines = file.readlines()
+            urls.extend({url for line in lines if (url := line.strip())})
+        except OSError as e:
+            logging.error("Error reading batch file: %s", e)
+    if len(urls) == 0:
+        logging.error("No URLs to process")
+        sys.exit(1)
 
     # Create the queues
     logging.debug("Creating queues")
-    generic_url_queue = JoinableQueue()
+    input_url_queue = JoinableQueue()
     video_url_queue = JoinableQueue()
     unique_video_url_queue = JoinableQueue()
     progress_queue = JoinableQueue()
@@ -77,8 +105,8 @@ def main():
         WorkerPool.from_class(
             args.n_info_workers,
             InfoWorker,
-            other_args,
-            generic_url_queue,
+            ytdlp_args,
+            input_url_queue,
             video_url_queue,
         ),
         DedupWorker(
@@ -88,7 +116,7 @@ def main():
         WorkerPool.from_class(
             args.n_dl_workers,
             DownloadWorker,
-            other_args,
+            ytdlp_args,
             unique_video_url_queue,
             progress_queue,
         ),
@@ -97,28 +125,35 @@ def main():
         ),
     )
 
-    # Start the workers
-    logging.debug("Starting workers")
-    for worker in workers:
-        worker.start()
+    # Wrap everything in a try/except to handle KeyboardInterrupt gracefully
+    try:
 
-    # Send the initial URLs to the queue
-    print("Getting video info...")
-    logging.debug("Sending initial URLs to the queue")
-    for cli_url in cli_urls:
-        logging.debug(f"\t {cli_url}")
-        generic_url_queue.put(cli_url)
+        # Start the workers
+        logging.debug("Starting workers")
+        for worker in workers:
+            worker.start()
 
-    # Wait for every step to finish, one after the other
-    for i, worker in enumerate(workers):
-        logging.debug(f"Waiting for worker {i} to finish")
-        worker.dismiss()
-        logging.debug(f"\tDismissed worker {i}")
-        worker_input_queue = worker.get_input_queue()
-        worker_input_queue.close()
-        worker_input_queue.join()
-        logging.debug(f"\tWorker {i} finished")
-    logging.debug("All workers finished")
+        # Send the initial URLs to the queue
+        print("Getting video info...")
+        logging.debug("Sending initial URLs to the queue")
+        for url in urls:
+            logging.debug("\t %s", url)
+            input_url_queue.put(url)
+
+        # Wait for every step to finish, one after the other
+        for i, worker in enumerate(workers):
+            kind = "WorkerPool" if isinstance(worker, WorkerPool) else "Worker"
+            logging.debug("Waiting for %s %d to finish", kind, i)
+            worker.dismiss()
+            logging.debug("Dismissed %s %d", kind, i)
+            worker_input_queue = worker.get_input_queue()
+            worker_input_queue.close()
+            worker_input_queue.join()
+            logging.debug("%s %d finished", kind, i)
+        logging.debug("All workers finished")
+
+    except KeyboardInterrupt:
+        print("Interrupted by user")
 
     # If all went well, all of our workers finished
     # The remaining ones will be killed at exit since they're daemon processes
