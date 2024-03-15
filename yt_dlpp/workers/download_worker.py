@@ -5,6 +5,7 @@ from multiprocessing import JoinableQueue
 from subprocess import PIPE, Popen
 from typing import Literal, Sequence, TypedDict
 
+from yt_dlpp.interceptors.interceptor import DlInterceptor
 from yt_dlpp.workers.worker import Worker
 
 
@@ -39,21 +40,23 @@ class DownloadWorker(Worker):
     @property
     @lru_cache(maxsize=1)
     def _base_command(self) -> tuple[str]:
-        _progress_template = (
+        """Generate the base command"""
+        interceptor = DlInterceptor()
+        _, allowed = interceptor.parse_known_args(self._ydl_args)
+        progress_template = (
             "{"
             + '"video": %(info.{id,original_url,title})j,'
             + '"progress": %(progress.{downloaded_bytes,total_bytes,eta,speed,elapsed})j'
             + "}"
         )
-        """Generate the base command"""
         return (
             "yt-dlp",
             "--quiet",
             "--progress",
             "--newline",
             "--progress-template",
-            _progress_template,
-            *self._ydl_args,
+            progress_template,
+            *allowed,
         )
 
     def __init__(

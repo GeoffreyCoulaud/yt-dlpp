@@ -1,10 +1,10 @@
 import json
 import logging
-from argparse import ArgumentParser
 from multiprocessing import JoinableQueue
 from subprocess import CalledProcessError, run
 from typing import Sequence
 
+from yt_dlpp.interceptors.interceptor import InfoInterceptor
 from yt_dlpp.workers.worker import Worker
 
 
@@ -28,14 +28,13 @@ class InfoWorker(Worker[str, str]):
     ) -> None:
         super().__init__(input_queue, output_queue)
         # Define base command args
-        # (removes --no-simulate from ydl args at info stage)
-        parser = ArgumentParser()
-        parser.add_argument("--no-simulate")
-        _, allowed_ydl_args = parser.parse_known_args(ydl_args)
+        interceptor = InfoInterceptor()
+        _, allowed = interceptor.parse_known_args(ydl_args)
         self._base_command = (
             "yt-dlp",
+            "--simulate",
             "--dump-json",
-            *allowed_ydl_args,
+            *allowed,
         )
         logging.debug(
             "InfoWorker initialised with base command: %s",
