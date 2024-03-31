@@ -46,7 +46,7 @@ class DownloadWorker(Worker):
         progress_template = (
             "{"
             + '"video": %(info.{id,original_url,title})j,'
-            + '"progress": %(progress.{downloaded_bytes,total_bytes,eta,speed,elapsed})j'
+            + '"progress": %(progress.{downloaded_bytes,total_bytes,total_bytes_estimate,eta,speed,elapsed})j'
             + "}"
         )
         return (

@@ -8,6 +8,10 @@ It supports passing multiple download URLs and unwrapping playlists.
 
 ## Installation
 
+### From pypi
+
+TODO: package, publish and document installation
+
 ### From source, on Linux
 
 ```sh
