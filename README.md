@@ -10,7 +10,10 @@ It supports passing multiple download URLs and unwrapping playlists.
 
 ### From pypi
 
-TODO: package, publish and document installation
+```sh
+pip install yt-dlpp
+```
+
 
 ### From source, on Linux
 
