@@ -13,12 +13,12 @@ keywords = [
 	"parallel",
 ]
 readme = "README.md"
-license = {text = "GPLv3"}
+license = {file = "LICENSE.md"}
 authors = [
 	{ name = "Geoffrey Coulaud", email = "geoffrey.coulaud@gmail.com" },
 ]
 classifiers = [
-	"License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+	"License :: OSI Approved :: The Unlicense (Unlicense)",
 	"Programming Language :: Python :: 3.11",
 	"Programming Language :: Python :: 3",
 ]
