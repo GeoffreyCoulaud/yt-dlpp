@@ -8,6 +8,9 @@ It supports passing multiple download URLs and unwrapping playlists.
 
 ## Installation
 
+Note: In addition to `yt-dlpp`, it is expected that you also have a valid `yt-dlp` install available in the command line.  
+Only Linux has been tested and validated, but feel free to open a PR to add support for other OS-es. 
+
 ### From pypi
 
 ```sh
