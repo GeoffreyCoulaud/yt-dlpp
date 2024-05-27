@@ -18,11 +18,10 @@ pip install yt-dlpp
 ### From source, on Linux
 
 ```sh
-git clone "$YT_DLPP_REPO"
+git clone https://github.com/GeoffreyCoulaud/yt-dlpp.git
 cd yt-dlpp
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
 pip install
 ```
 
@@ -37,6 +36,31 @@ Below, you can find a short list of the added arguments:
 | - | - | - |
 | `--n-info-workers` | Number concurrent url info extraction workers | Number of CPUs in the system |
 | `--n-dl-workers` | Number concurrent download workers | Number of CPUs in the system |
+
+## Architecture
+
+`yt-dlpp` spreads the info getting and downloads to multiple worker processes. Here is an architecture overview of the project :
+
+```mermaid
+graph TD
+    A[CLI Entry Point]-->B[Info Worker 1]
+    A-->C[Info Worker 2]
+    A-->D[...]
+    A-->E[Info Worker N]
+    B-->F[Download Deduplication Worker]
+	C-->F
+	D-->F
+	E-->F
+	F-->G[Download Worker 1]
+	F-->H[Download Worker 2]
+	F-->I[...]
+	F-->J[Download Worker N]
+	G-->K[Progress Display Worker]
+	H-->K
+	I-->K
+	J-->K
+
+```
 
 ## Reason to exist
 
