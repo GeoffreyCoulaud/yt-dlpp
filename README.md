@@ -45,24 +45,38 @@ Below, you can find a short list of the added arguments:
 `yt-dlpp` spreads the info getting and downloads to multiple worker processes. Here is an architecture overview of the project :
 
 ```mermaid
-graph TD
-    A[CLI Entry Point]-->B[Info Worker 1]
-    A-->C[Info Worker 2]
-    A-->D[...]
-    A-->E[Info Worker N]
-    B-->F[Download Deduplication Worker]
-	C-->F
-	D-->F
-	E-->F
-	F-->G[Download Worker 1]
-	F-->H[Download Worker 2]
-	F-->I[...]
-	F-->J[Download Worker N]
-	G-->K[Progress Display Worker]
-	H-->K
-	I-->K
-	J-->K
+graph TB
+	User
+	CLI
+	subgraph IWs [ ]
+		direction LR
+		IW1[Info Worker 1]
+		IW2[Info Worker 2]
+		IWN[Info Worker N]
+		IW1 ~~~ IW2 ~~~ IWN
+	end
+	Dedup[Download Deduplication Worker]
+	subgraph DWs [ ]
+		direction LR
+		DW1[Download Worker 1]
+		DW2[Download Worker 2]
+		DWN[Download Worker N]
+		DW1 ~~~ DW2 ~~~ DWN
+	end
+	FS[File System]
+	Progress[Progress Display Worker]
+	Screen
 
+
+	User -->|Video URLs, Playlists URLs, Batch file| CLI
+	CLI[CLI Entry Point] -->|URLs| IWs
+    IWs -->|Video URLs| Dedup
+	Dedup -->|Session-unique URLs| DWs
+	DWs -->|Download progress info| Progress
+	Progress -->|Progress bars, ETAs| Screen
+	DWs -->|Downloaded media| FS[File system]
+	
+	
 ```
 
 ## Reason to exist
